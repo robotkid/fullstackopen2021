@@ -1,4 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import axios from 'axios'
+
 
 const SearchFilter = ({ searchTerm, callback }) => (
   <div>
@@ -76,6 +78,16 @@ const App = () => {
   const peopleToShow = persons.filter(p =>
     p.name.toLowerCase().includes(searchTerm.toLowerCase())
   )
+
+
+  useEffect(() => {
+    axios
+      .get('http://localhost:3001/persons')
+      .then(response => {
+        setPersons(response.data)
+      })
+  }, [])
+
 
   return (
     <div>
