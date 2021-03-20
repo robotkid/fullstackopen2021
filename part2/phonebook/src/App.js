@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import axios from 'axios'
-
+import { __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED } from 'react-dom'
+import personService from './services/persons'
 
 const SearchFilter = ({ searchTerm, callback }) => (
   <div>
@@ -33,12 +33,25 @@ const PersonForm = ({ newPerson, onNameChange, onNumberChange, onFormSubmit }) =
   )
 }
 
-const PersonList = ({ persons }) => (
+const PersonList = ({ persons, deleteHandler }) => (
   persons.map(person =>
     <p key={person.name}>
       {person.name} {person.number}
+      <button onClick={(e) => deleteHandler(person)}>Delete</button>
     </p>)
 )
+
+const Notification = ({ message, className }) => {
+  if (message === null) {
+    return null
+  }
+
+  return (
+    <div className={className}>
+      {message}
+    </div>
+  )
+}
 
 const App = () => {
   const [persons, setPersons] = useState([
@@ -49,8 +62,9 @@ const App = () => {
   ])
 
   const [newPerson, setNewPerson] = useState({ name: '', number: '' })
-
   const [searchTerm, setSearchTerm] = useState('')
+  const [errorMessage, setErrorMessage] = useState(null)
+  const [successMessage, setSuccessMessage] = useState(null)
 
   const handleNameChange = (event) => {
     setNewPerson({ ...newPerson, name: event.target.value })
@@ -64,14 +78,43 @@ const App = () => {
     setSearchTerm(event.target.value)
   })
 
+  const updatePerson = () => {
+    const existingIndex = persons.findIndex(p => p.name === newPerson.name)
+    const person = persons[existingIndex]
+    if (window.confirm(`Replace number for ${person.name}?`)) {
+      personService
+        .update(person.id, newPerson)
+        .then(updatedPerson => {
+          const newPersons = [...persons]
+          newPersons[existingIndex] = updatedPerson
+          setPersons(newPersons)
+          setNewPerson({ name: '', number: '' })
+          setSuccessMessage(`Number changed for ${updatedPerson.name}`)
+          window.setTimeout(setSuccessMessage, 3000, null)
+        })
+        .catch(error => {
+          setErrorMessage(`${newPerson.name} was already deleted from the server`)
+          setPersons(persons.filter(p => p.name !== newPerson.name))
+          setNewPerson({ name: '', number: '' })
+          window.setTimeout(setErrorMessage, 3000, null)
+        })
+    }
+  }
+
   const addPerson = (event) => {
     event.preventDefault()
     if (persons.some(p => p.name === newPerson.name)) {
-      alert(`${newPerson.name} is already added to phonebook`)
+      updatePerson()
     }
     else {
-      setPersons(persons.concat(newPerson))
-      setNewPerson({ name: '', number: '' })
+      personService
+        .create(newPerson)
+        .then(returnedPerson => {
+          setPersons(persons.concat(returnedPerson))
+          setNewPerson({ name: '', number: '' })
+          setSuccessMessage(`${returnedPerson.name} successfully added`)
+          window.setTimeout(setSuccessMessage, 3000, null)
+        })
     }
   }
 
@@ -79,12 +122,24 @@ const App = () => {
     p.name.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
+  const deletePerson = (person) => {
+    if (window.confirm(`Delete ${person.name}?`)) {
+      personService
+        .deleteItem(person.id)
+        .then(() => {
+          const newPersons = [...persons]
+          const index = newPersons.indexOf(person)
+          newPersons.splice(index, 1)
+          setPersons(newPersons)
+        })
+    }
+  }
 
   useEffect(() => {
-    axios
-      .get('http://localhost:3001/persons')
-      .then(response => {
-        setPersons(response.data)
+    personService
+      .getAll()
+      .then(initialPersons => {
+        setPersons(initialPersons)
       })
   }, [])
 
@@ -92,6 +147,12 @@ const App = () => {
   return (
     <div>
       <h2>Phonebook</h2>
+      {successMessage !== null &&
+        <Notification message={successMessage} className="success" />
+      }
+      {errorMessage !== null &&
+        <Notification message={errorMessage} className="error" />
+      }
       <SearchFilter
         searchTerm={searchTerm}
         callback={handleSearchChange}
@@ -103,7 +164,7 @@ const App = () => {
         onFormSubmit={addPerson}
       />
       <h2>Numbers</h2>
-      <PersonList persons={peopleToShow} />
+      <PersonList persons={peopleToShow} deleteHandler={deletePerson} />
     </div >
   )
 }
